@@ -1,12 +1,10 @@
-
-
 #' Create a Seurat Object from 10X Multiome Data with Quality Filtering
 #'
 #' @param sample_dir Path to the 10X sample directory.
 #' @param gtf_file Path to the GTF file for gene annotations.
 #' @param dry_run Logical, if TRUE, checks for required files without loading data.
-#' @param min_counts_atac Minimum ATAC counts per cell (default: 3000).
-#' @param min_nFeature_RNA Minimum unique genes per cell (default: 1500).
+#' @param min_counts_atac Minimum ATAC counts per cell (default: 2000).
+#' @param min_nFeature_RNA Minimum unique genes per cell (default: 1000).
 #' @param remove_failed_samples Logical, if TRUE (default), samples with no passing cells are removed.
 #' @param include_RNA Logical, if TRUE (default), includes RNA data in the Seurat object.
 #' @param include_ATAC Logical, if TRUE (default), includes ATAC data in the Seurat object.
@@ -14,7 +12,7 @@
 #' @return A Seurat object with RNA and/or ATAC assays, filtered by quality metrics.
 #' @export
 import_to_seurat <- function(sample_dir, gtf_file, dry_run = FALSE,
-                             min_counts_atac = 2000,
+                             min_counts_atac = 1000,
                              min_nFeature_RNA = 1000,
                              remove_failed_samples = TRUE,
                              include_RNA = TRUE,
@@ -106,13 +104,29 @@ import_to_seurat <- function(sample_dir, gtf_file, dry_run = FALSE,
   if (!is.null(seurat_obj)) {
     message("Applying quality control filtering...")
 
-    if ("nFeature_RNA" %in% colnames(seurat_obj@meta.data) &&
-        "nCount_ATAC" %in% colnames(seurat_obj@meta.data)) {
+    has_rna <- "nFeature_RNA" %in% colnames(seurat_obj@meta.data)
+    has_atac <- "nCount_ATAC" %in% colnames(seurat_obj@meta.data)
 
-      cells_to_keep <- which(
-        seurat_obj$nFeature_RNA >= min_nFeature_RNA &
-        seurat_obj$nCount_ATAC >= min_counts_atac
-      )
+    if (!has_rna && !has_atac) {
+      warning("No RNA or ATAC QC metrics found. Skipping filtering.")
+    } else {
+      cells_to_keep <- colnames(seurat_obj)
+
+      if (has_rna) {
+        message("Filtering based on nFeature_RNA ≥ ", min_nFeature_RNA)
+        cells_to_keep <- intersect(
+          cells_to_keep,
+          colnames(seurat_obj)[seurat_obj$nFeature_RNA >= min_nFeature_RNA]
+        )
+      }
+
+      if (has_atac) {
+        message("Filtering based on nCount_ATAC ≥ ", min_counts_atac)
+        cells_to_keep <- intersect(
+          cells_to_keep,
+          colnames(seurat_obj)[seurat_obj$nCount_ATAC >= min_counts_atac]
+        )
+      }
 
       if (length(cells_to_keep) == 0) {
         if (remove_failed_samples) {
@@ -120,14 +134,12 @@ import_to_seurat <- function(sample_dir, gtf_file, dry_run = FALSE,
           return(NULL)
         } else {
           warning("No cells passed filtering. Returning unfiltered Seurat object.")
+          return(seurat_obj)
         }
-      } else {
-        seurat_obj <- subset(seurat_obj, cells = colnames(seurat_obj)[cells_to_keep])
-        message("Seurat object created successfully with ", ncol(seurat_obj), " high-quality cells.")
       }
 
-    } else {
-      warning("Quality metrics not found in Seurat object metadata. Skipping filtering.")
+      seurat_obj <- subset(seurat_obj, cells = cells_to_keep)
+      message("Seurat object created successfully with ", ncol(seurat_obj), " high-quality cells.")
     }
   }
 
@@ -136,6 +148,7 @@ import_to_seurat <- function(sample_dir, gtf_file, dry_run = FALSE,
 
   return(seurat_obj)
 }
+
 
 # ADD SCT transforrm and save
 # return list of surat object and corresponding ggplots
