@@ -9,4 +9,4 @@ You can install the latest version of `chickenSingleCell` directly from GitHub u
 install.packages("devtools")
 
 # Install chickenSingleCell from GitHub
-devtools::install_github("your-github-username/chickenSingleCell")
+devtools::install_github("drowsygoat/chickenSingleCell")
