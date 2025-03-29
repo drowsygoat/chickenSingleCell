@@ -21,7 +21,7 @@
 #' @export
 #' 
 
-create_seurat_list <- function(parent_dir, gtf_file, dry_run = FALSE) {
+create_seurat_list <- function(parent_dir, gtf_file, dry_run = FALSE, include_ATAC = TRUE, include_metadata = FALSE) {
   if (!dir.exists(parent_dir)) {
     stop("The specified parent directory does not exist: ", parent_dir)
   }
@@ -36,7 +36,7 @@ create_seurat_list <- function(parent_dir, gtf_file, dry_run = FALSE) {
 
   # Process each sample directory
   for (sample in sample_dirs) {
-    seurat_tmp <- import_to_seurat(sample, gtf_file, dry_run = dry_run)
+    seurat_tmp <- import_to_seurat(sample, gtf_file, dry_run = dry_run, include_ATAC = include_ATAC, include_metadata = include_metadata)
     if (is.null(seurat_tmp)) {
       message("Skipping ", sample, " due to no cells after subsetting")
       next

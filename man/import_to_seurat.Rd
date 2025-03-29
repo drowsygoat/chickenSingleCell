@@ -2,28 +2,42 @@
 % Please edit documentation in R/import_to_seurat.R
 \name{import_to_seurat}
 \alias{import_to_seurat}
-\title{Create a Seurat Object from 10X Multiome Data}
+\title{Create a Seurat Object from 10X Multiome Data with Quality Filtering}
 \usage{
-import_to_seurat(sample_dir, gtf_file)
+import_to_seurat(
+  sample_dir,
+  gtf_file,
+  dry_run = FALSE,
+  min_counts_atac = 1000,
+  min_nFeature_RNA = 1000,
+  remove_failed_samples = TRUE,
+  include_RNA = TRUE,
+  include_ATAC = TRUE,
+  include_metadata = FALSE
+)
 }
 \arguments{
-\item{sample_dir}{A character string specifying the path to the 10X sample directory.
-This should be the root directory containing the "outs" folder.}
+\item{sample_dir}{Path to the 10X sample directory.}
 
-\item{gtf_file}{A character string specifying the path to the GTF file for gene annotations.}
+\item{gtf_file}{Path to the GTF file for gene annotations.}
+
+\item{dry_run}{Logical, if TRUE, checks for required files without loading data.}
+
+\item{min_counts_atac}{Minimum ATAC counts per cell (default: 2000).}
+
+\item{min_nFeature_RNA}{Minimum unique genes per cell (default: 1000).}
+
+\item{remove_failed_samples}{Logical, if TRUE (default), samples with no passing cells are removed.}
+
+\item{include_RNA}{Logical, if TRUE (default), includes RNA data in the Seurat object.}
+
+\item{include_ATAC}{Logical, if TRUE (default), includes ATAC data in the Seurat object.}
+
+\item{include_metadata}{Logical, if TRUE (default), adds metadata to the Seurat object.}
 }
 \value{
-A Seurat object containing both RNA and ATAC assays along with per-barcode metadata.
+A Seurat object with RNA and/or ATAC assays, filtered by quality metrics.
 }
 \description{
-This function processes a 10X Genomics (Cell Ranger ARC) sample directory, loads RNA and ATAC data,
-creates a Seurat object with both RNA and ATAC assays, and adds per-barcode metadata if available.
-}
-\details{
-The function expects the standard 10X output directory structure, including the filtered H5 matrix,
-ATAC fragments file, and per-barcode metrics. It also requires a GTF file for gene annotations.
-}
-\examples{
-seurat_obj <- import_to_seurat("/path/to/sample", "path/to/annotations.gtf")
-
+Create a Seurat Object from 10X Multiome Data with Quality Filtering
 }
