@@ -170,14 +170,6 @@ cluster_and_explore <- function(seurat_obj,
     })
   }
 
-  marker_plots <- plot_top_marker_genes(seurat_obj = seurat_obj,
-                                        cluster_col = cluster_label,
-                                        use.assay = use.assay,
-                                        output_dir = output_dir,
-                                        sample_name = sample_name,
-                                        umap_name = umap_name,
-                                        return_plots = TRUE)
-
   # ---- Helper: Save dynamically sized plot section ----
   save_plot_section <- function(plots, file_prefix, sample_name, assay, ncol = 2, plot_width = 5, plot_height = 5) {
     n <- length(plots)
