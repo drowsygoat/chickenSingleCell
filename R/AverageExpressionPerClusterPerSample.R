@@ -37,6 +37,7 @@ AverageExpressionPerClusterPerSample <- function(obj_list,
                                                  normalization.method = c("LogNormalize", "CLR", "RC", "none"),
                                                  scale.factor = 10000,
                                                  ...) {
+                                                  
   normalization.method <- match.arg(normalization.method)
 
   if (inherits(obj_list, "Seurat")) {
@@ -93,7 +94,6 @@ AverageExpressionPerClusterPerSample <- function(obj_list,
         return(NULL)
       }
 
-
         agg_exp <- AggregateExpression(
           sample_obj,
           assays = this_assay,
@@ -105,12 +105,12 @@ AverageExpressionPerClusterPerSample <- function(obj_list,
           verbose = FALSE
         )[[this_assay]]
 
-        name <- paste0("sample_", sample, "_obj", i)
+        name <- paste0("sample_", sample, "_obj", i, "_", this_assay)
         setNames(list(agg_exp), name)
       })
     }),
     recursive = FALSE
   )
 
-  return(result_list)
+  return(flatten(result_list))
 }
