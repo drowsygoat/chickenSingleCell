@@ -6,7 +6,7 @@ plot_cluster_dimplot <- function(seurat_obj,
                                  pt.size = 1,
                                  pdf_dir = "plots",
                                  save_as_pdf = TRUE) {
-                                  
+
   make_error_plot <- function(msg, sample_name = "unknown") {
     p <- ggplot2::ggplot() +
       ggplot2::theme_void() +
@@ -99,7 +99,7 @@ plot_cluster_dimplot <- function(seurat_obj,
       tag <- if (is.null(highlight)) "all" else paste(highlight, collapse = "_")
       filename <- file.path(pdf_dir, paste0("DimPlot_", sample_name, "_", group_by, "_", tag, ".pdf"))
 
-      grDevices::pdf(filename, width = 30, height = 30)
+      grDevices::pdf(filename, width = 20, height = 15)
       for (i in seq(1, length(plot_list), by = 4)) {
         patch <- patchwork::wrap_plots(plot_list[i:min(i + 3, length(plot_list))])
         print(patch)
