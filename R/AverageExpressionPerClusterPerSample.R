@@ -105,7 +105,7 @@ AverageExpressionPerClusterPerSample <- function(obj_list,
           verbose = FALSE
         )[[this_assay]]
 
-        name <- paste0("sample_", sample, "_obj", i, "_", this_assay)
+        name <- paste0(sample, "_obj", i, "_", this_assay)
         setNames(list(agg_exp), name)
       })
     }),
