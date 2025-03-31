@@ -53,10 +53,18 @@ IntegrateSeuratObjects <- function(
     function(X, FUN) lapply(X, FUN)
   }
 
+  seurat_list <- Filter(function(x) inherits(x, "Seurat"), seurat_list)
+
   # Preprocess each object
   seurat_list <- apply_fun(seq_along(seurat_list), function(i) {
 
     obj <- seurat_list[[i]]
+
+    # Skip object if fewer than 50 cells remain
+    if (ncol(obj) < 50) {
+      if (verbose) message(sprintf("Skipping object %d: fewer than 50 cells after filtering.", i))
+      return(NULL)
+    }
 
     DefaultAssay(obj) <- assay_type
 
@@ -64,7 +72,6 @@ IntegrateSeuratObjects <- function(
     if (diet) {
       obj <- do.call(DietSeurat, c(list(obj), diet_args))
     }
-
 
     obj <- label_high_mito(obj, threshold = mito_threshold, assay.type = assay_type)
 
@@ -81,6 +88,12 @@ IntegrateSeuratObjects <- function(
 
     return(obj)
   })
+
+  seurat_list <- Filter(Negate(is.null), seurat_list)
+
+  if (length(seurat_list) < 2) {
+    stop("Integration requires at least two Seurat objects with ≥50 cells after filtering.")
+  }
 
   # MEMORY - CAREFUL!!!!
   if (return_unintegrated) {
