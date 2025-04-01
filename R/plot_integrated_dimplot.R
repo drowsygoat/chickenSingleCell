@@ -1,3 +1,51 @@
+#' Plot Integrated Seurat Dimensionality Reductions with Features or Metadata
+#'
+#' Generates `FeaturePlot` or `DimPlot` visualizations for dimensionality reduction results
+#' (e.g., UMAP, t-SNE) from a Seurat object, grouped by metadata or gene expression.
+#' Supports subsetting, highlighting, automatic feature selection from DE results, and PDF export.
+#'
+#' @param seurat_obj A Seurat object.
+#' @param group_by Character. Name of the metadata column to group/color cells by. If `NULL` and `feature` is also `NULL`, defaults to `Idents(seurat_obj)`.
+#' @param highlight Character vector of values in `group_by` to highlight. All other values will be grouped under "Other".
+#' @param feature Character. Gene name (or vector of genes) to plot expression with `FeaturePlot`. If `NULL`, uses `group_by` metadata instead.
+#' @param auto_feature_from_de Logical. If `TRUE` and `feature = NULL`, attempts to auto-select a top DE gene (based on `de_source`).
+#' @param cluster_id Character or numeric. Cluster ID to filter DE genes by when selecting feature automatically.
+#' @param de_source Character. Where to extract DE results from, e.g., `"misc$de_results"`.
+#' @param reduction Character vector. Which reductions to plot (e.g., `"umap"`, `"tsne"`). If `NULL`, all reductions are used.
+#' @param split_by Character. Metadata column to facet/split plots by.
+#' @param pt.size Numeric. Point size for cells.
+#' @param subset_expr Expression. A logical expression (using metadata columns) to subset the object before plotting, e.g., `percent.mt < 10`.
+#' @param pdf_dir Character. Directory where PDF will be saved if `save_as_pdf = TRUE`.
+#' @param save_as_pdf Logical. Whether to save the plots to a PDF.
+#' @param color_gradient Character vector of length 2. Colors for gradient if plotting a numeric metadata column.
+#' @param verbose Logical. If `TRUE`, prints informative messages during execution.
+#'
+#' @return A `ggplot` object (if 1 plot), or a `patchwork` object combining multiple plots. Also optionally saves to PDF.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Default usage
+#' plot_integrated_dimplot(seurat_obj)
+#'
+#' # Group by metadata
+#' plot_integrated_dimplot(seurat_obj, group_by = "cell_type")
+#'
+#' # Color by gene expression
+#' plot_integrated_dimplot(seurat_obj, feature = "Sox2")
+#'
+#' # Split by sample
+#' plot_integrated_dimplot(seurat_obj, feature = "Sox2", split_by = "sample")
+#'
+#' # Highlight selected values
+#' plot_integrated_dimplot(seurat_obj, group_by = "cell_type", highlight = c("Neuron", "Astrocyte"))
+#'
+#' # Subset the object before plotting
+#' plot_integrated_dimplot(seurat_obj, group_by = "cell_type", subset_expr = percent.mt < 10)
+#'
+#' # Use auto-selected DE gene from cluster 1
+#' plot_integrated_dimplot(seurat_obj, auto_feature_from_de = TRUE, cluster_id = "1")
+#' }
 plot_integrated_dimplot <- function(seurat_obj,
                                     group_by = NULL,
                                     highlight = NULL,
@@ -26,7 +74,7 @@ plot_integrated_dimplot <- function(seurat_obj,
   if (!auto_feature_from_de && !is.null(cluster_id)) {
     warning("⚠️ 'cluster_id' is ignored because auto_feature_from_de = FALSE.")
   }
-ü
+
   tryCatch({
     if (!inherits(seurat_obj, "Seurat")) stop("Input is not a Seurat object.")
     if (verbose) message("✅ Seurat object check passed")
@@ -208,10 +256,19 @@ plot_integrated_dimplot <- function(seurat_obj,
       suffix <- paste0("_", tag, if (!is.null(split_by)) paste0("_splitby_", split_by) else "")
       filename <- file.path(pdf_dir, paste0("IntegratedPlot", suffix, ".pdf"))
 
-      ncol <- 3
-      nrow <- ceiling(length(plots) / ncol)
-      plot_width <- 7
-      plot_height <- 7
+      plot_count <- length(plots)
+
+      if (plot_count <= 3) {
+        ncol <- plot_count
+        plot_width <- 10
+        plot_height <- 10
+      } else {
+        ncol <- 3
+        plot_width <- 7
+        plot_height <- 7
+      }
+
+      nrow <- ceiling(plot_count / ncol)
 
       patch <- patchwork::wrap_plots(plots, ncol = ncol)
       ggplot2::ggsave(filename, plot = patch, width = plot_width * ncol, height = plot_height * nrow, limitsize = FALSE)
