@@ -1,0 +1,240 @@
+plot_integrated_dimplot <- function(seurat_obj,
+                                    group_by = NULL,
+                                    highlight = NULL,
+                                    feature = NULL,
+                                    auto_feature_from_de = FALSE,
+                                    cluster_id = NULL,
+                                    de_source = "misc$de_results",
+                                    reduction = NULL,
+                                    split_by = NULL,
+                                    pt.size = 1,
+                                    subset_expr = NULL,
+                                    pdf_dir = "plot_integrated_dimplot",
+                                    save_as_pdf = TRUE,
+                                    color_gradient = c("lightgrey", "blue"),
+                                    verbose = TRUE) {
+  make_error_plot <- function(msg) {
+    ggplot2::ggplot() +
+      ggplot2::theme_void() +
+      ggplot2::geom_text(
+        ggplot2::aes(x = 0.5, y = 0.5, label = msg),
+        size = 6, hjust = 0.5, vjust = 0.5
+      ) +
+      ggplot2::ggtitle("Error")
+  }
+
+  if (!auto_feature_from_de && !is.null(cluster_id)) {
+    warning("⚠️ 'cluster_id' is ignored because auto_feature_from_de = FALSE.")
+  }
+ü
+  tryCatch({
+    if (!inherits(seurat_obj, "Seurat")) stop("Input is not a Seurat object.")
+    if (verbose) message("✅ Seurat object check passed")
+
+    if (!is.null(subset_expr)) {
+      if (verbose) message("🔍 Subsetting Seurat object using expression: ", deparse(substitute(subset_expr)))
+      tryCatch({
+        seurat_obj <- subset(seurat_obj, subset = subset_expr)
+      }, error = function(e) {
+        stop("❌ Failed to subset Seurat object using `subset_expr`: ", conditionMessage(e))
+      })
+    }
+
+    if (is.null(feature) && is.null(group_by)) {
+      group_by <- "seurat_idents"
+      seurat_obj[[group_by]] <- Idents(seurat_obj)
+      if (verbose) message("📌 Defaulting to Idents(seurat_obj) as group_by.")
+    }
+
+    if (is.null(feature) && auto_feature_from_de) {
+      if (verbose) message("🔍 Trying to auto-select feature from DE results...")
+      de_results <- tryCatch(eval(parse(text = paste0("seurat_obj@", de_source))), error = function(e) NULL)
+      top_gene <- NULL
+
+      if (!is.null(de_results) && "gene" %in% colnames(de_results)) {
+        if (!is.null(cluster_id)) {
+          top_gene <- de_results |>
+            subset(cluster == cluster_id) |>
+            head(1) |>
+            dplyr::pull(gene)
+          if (verbose) message("🔎 Using top DE gene from cluster ", cluster_id, ": ", top_gene)
+        } else {
+          top_gene <- head(de_results$gene, 1)
+          if (verbose) message("✨ Using top DE gene from DE table: ", top_gene)
+        }
+      }
+
+      if (is.null(top_gene) && length(VariableFeatures(seurat_obj)) > 0) {
+        top_gene <- VariableFeatures(seurat_obj)[1]
+        if (verbose) message("⚠️ DE results not found. Using top variable gene: ", top_gene)
+      }
+
+      if (!is.null(top_gene) && top_gene %in% rownames(seurat_obj)) {
+        feature <- top_gene
+      } else {
+        warning("❌ Could not auto-select a gene. You may need to set `feature` manually.")
+      }
+    }
+
+    all_reductions <- Seurat::Reductions(seurat_obj)
+    if (is.null(reduction)) {
+      reduction <- all_reductions
+      if (verbose) message("📌 No reduction specified. Using: ", paste(reduction, collapse = ", "))
+    } else {
+      missing <- setdiff(reduction, all_reductions)
+      if (length(missing) > 0) stop("Reduction(s) not found: ", paste(missing, collapse = ", "))
+      if (verbose) message("✅ Using specified reductions: ", paste(reduction, collapse = ", "))
+    }
+
+    plots <- list()
+    split_levels <- if (!is.null(split_by)) unique(seurat_obj[[split_by]][, 1]) else NA
+    if (verbose && !is.null(split_by)) message("📌 Split by: ", split_by, " with levels: ", paste(split_levels, collapse = ", "))
+
+    for (red in reduction) {
+      if (verbose) message("🔄 Processing reduction: ", red)
+
+      if (!is.null(feature)) {
+        plot_feature <- feature
+        if (verbose) message("🎨 Plotting gene: ", plot_feature)
+
+        if (!(plot_feature %in% rownames(seurat_obj))) {
+          stop("Feature '", plot_feature, "' not found in expression matrix.")
+        }
+
+        if (is.na(split_levels[1])) {
+          p <- Seurat::FeaturePlot(
+            seurat_obj,
+            features = plot_feature,
+            reduction = red,
+            pt.size = pt.size
+          ) +
+            ggplot2::labs(title = paste0(red, " - ", plot_feature), color = "Expression") +
+            ggplot2::theme(aspect.ratio = 1)
+          plots[[red]] <- p
+        } else {
+          for (split_val in split_levels) {
+            subset_cells <- colnames(seurat_obj)[seurat_obj[[split_by]][, 1] == split_val]
+            subset_obj <- subset(seurat_obj, cells = subset_cells)
+            p <- Seurat::FeaturePlot(
+              subset_obj,
+              features = plot_feature,
+              reduction = red,
+              pt.size = pt.size
+            ) +
+              ggplot2::labs(title = paste0(red, " - ", plot_feature, " (", split_by, ": ", split_val, ")"), color = "Expression") +
+              ggplot2::theme(aspect.ratio = 1)
+            plots[[paste0(red, "_", split_val)]] <- p
+          }
+        }
+
+      } else {
+        if (!group_by %in% colnames(seurat_obj@meta.data)) {
+          stop("Column '", group_by, "' not found in metadata.")
+        }
+
+        is_numeric <- is.numeric(seurat_obj@meta.data[[group_by]])
+        temp_col <- paste0("highlight_", group_by)
+        meta_col <- if (is.data.frame(seurat_obj[[group_by]])) seurat_obj[[group_by]][, 1] else seurat_obj[[group_by]]
+        seurat_tmp <- seurat_obj
+
+        if (!is.null(highlight) && !is_numeric) {
+          valid_highlights <- highlight[highlight %in% unique(meta_col)]
+          if (verbose) message("✨ Highlighting: ", paste(valid_highlights, collapse = ", "))
+          seurat_tmp[[temp_col]] <- ifelse(meta_col %in% valid_highlights, meta_col, "Other")
+          seurat_tmp[[temp_col]] <- factor(seurat_tmp[[temp_col]], levels = c(sort(valid_highlights), "Other"))
+        } else {
+          seurat_tmp[[temp_col]] <- meta_col
+        }
+
+        if (is.na(split_levels[1])) {
+          if (is_numeric) {
+            p <- Seurat::FeaturePlot(
+              seurat_tmp,
+              features = group_by,
+              reduction = red,
+              pt.size = pt.size
+            ) +
+              ggplot2::labs(title = paste0(red, " - ", group_by), color = group_by) +
+              ggplot2::theme(aspect.ratio = 1) +
+              ggplot2::scale_color_gradient(low = color_gradient[1], high = color_gradient[2])
+          } else {
+            p <- Seurat::DimPlot(
+              seurat_tmp,
+              group.by = temp_col,
+              reduction = red,
+              pt.size = pt.size,
+              label = TRUE
+            ) +
+              ggplot2::labs(title = paste0(red, " - ", group_by), color = group_by) +
+              ggplot2::theme(aspect.ratio = 1)
+          }
+          plots[[red]] <- p
+        } else {
+          for (split_val in split_levels) {
+            subset_cells <- colnames(seurat_tmp)[seurat_tmp[[split_by]][, 1] == split_val]
+            subset_obj <- subset(seurat_tmp, cells = subset_cells)
+
+            if (is_numeric) {
+              p <- Seurat::FeaturePlot(
+                subset_obj,
+                features = group_by,
+                reduction = red,
+                pt.size = pt.size
+              ) +
+                ggplot2::labs(title = paste0(red, " - ", group_by, " (", split_by, ": ", split_val, ")"), color = group_by) +
+                ggplot2::theme(aspect.ratio = 1) +
+                ggplot2::scale_color_gradient(low = color_gradient[1], high = color_gradient[2])
+            } else {
+              p <- Seurat::DimPlot(
+                subset_obj,
+                group.by = temp_col,
+                reduction = red,
+                pt.size = pt.size,
+                label = TRUE
+              ) +
+                ggplot2::labs(title = paste0(red, " - ", group_by, " (", split_by, ": ", split_val, ")"), color = group_by) +
+                ggplot2::theme(aspect.ratio = 1)
+            }
+
+            plots[[paste0(red, "_", split_val)]] <- p
+          }
+        }
+      }
+    }
+
+    if (save_as_pdf && length(plots) > 0) {
+      if (!dir.exists(pdf_dir)) dir.create(pdf_dir, recursive = TRUE)
+      tag <- if (!is.null(feature)) feature else if (!is.null(highlight)) paste(highlight, collapse = "_") else group_by
+      suffix <- paste0("_", tag, if (!is.null(split_by)) paste0("_splitby_", split_by) else "")
+      filename <- file.path(pdf_dir, paste0("IntegratedPlot", suffix, ".pdf"))
+
+      ncol <- 3
+      nrow <- ceiling(length(plots) / ncol)
+      plot_width <- 7
+      plot_height <- 7
+
+      patch <- patchwork::wrap_plots(plots, ncol = ncol)
+      ggplot2::ggsave(filename, plot = patch, width = plot_width * ncol, height = plot_height * nrow, limitsize = FALSE)
+      if (verbose) message("💾 Saved PDF to: ", filename)
+    }
+
+    if (length(plots) == 1) {
+      return(invisible(plots[[1]]))
+    } else {
+      return(invisible(patchwork::wrap_plots(plots, ncol = 3)))
+    }
+
+  }, error = function(e) {
+    msg <- paste("Error:", conditionMessage(e))
+    message(msg)
+
+    err_plot <- make_error_plot(msg)
+    if (save_as_pdf) {
+      if (!dir.exists(pdf_dir)) dir.create(pdf_dir, recursive = TRUE)
+      filename <- file.path(pdf_dir, "IntegratedPlot_ERROR.pdf")
+      ggplot2::ggsave(filename, err_plot, width = 8, height = 8)
+      if (verbose) message("💾 Saved error PDF to: ", filename)
+    }
+    return(invisible(err_plot))
+  })
+}
