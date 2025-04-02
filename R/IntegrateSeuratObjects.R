@@ -10,12 +10,14 @@
 #' @param assay_type Assay name to use for normalization and regression (default = "RNA").
 #' @param regress_mito Logical; whether to regress out mitochondrial percentage (default = TRUE).
 #' @param regress_vars Character vector of metadata columns to regress out during scaling.
-#' @param nfeatures Number of variable features to select (default = 3000).
+#' @param nFeatures Number of variable features to select (default = 3000).
 #' @param dims Number of PCA dimensions to use for integration (default = 1:30).
 #' @param anchor_reduction Reduction method for finding anchors ("cca" or "rpca").
 #' @param return_unintegrated Logical; if TRUE, returns merged but unintegrated object (default = FALSE).
 #' @param diet Logical; whether to slim Seurat objects using DietSeurat (default = TRUE).
 #' @param diet_args A named list of arguments passed to \code{DietSeurat} if \code{diet = TRUE}.
+#' @param k.weight Number of neighbors to consider when weighting anchors (default = 100).
+#' @param log_warnings Logical; if TRUE, prints any warnings encountered (default = TRUE).
 #' @param verbose Logical; whether to print progress messages (default = TRUE).
 #'
 #' @return An integrated \code{Seurat} object with PCA run on the integrated assay,
@@ -26,17 +28,19 @@
 #' @export
 IntegrateSeuratObjects <- function(
   seurat_list,
-  min_features = 200,
   mito_threshold = 10,
+  min_features = 200,
   assay_type = "RNA",
   regress_mito = TRUE,
   regress_vars = c("nFeature_RNA"),
-  nfeatures = 2000,
+  nFeatures = 2000,
   dims = 1:30,
   anchor_reduction = "cca",
   return_unintegrated = FALSE,
   diet = TRUE,
   diet_args = list(assays = "RNA", counts = TRUE, data = FALSE, scale.data = FALSE),
+  k.weight = 100,
+  log_warnings = TRUE,
   verbose = TRUE
 ) {
   require(Seurat)
@@ -46,7 +50,6 @@ IntegrateSeuratObjects <- function(
     stop("Integration requires at least two Seurat objects.")
   }
 
-  # Use pbapply::pblapply if available, otherwise fall back to lapply
   apply_fun <- if (requireNamespace("pbapply", quietly = TRUE)) {
     function(X, FUN) pbapply::pblapply(X, FUN)
   } else {
@@ -55,20 +58,16 @@ IntegrateSeuratObjects <- function(
 
   seurat_list <- Filter(function(x) inherits(x, "Seurat"), seurat_list)
 
-  # Preprocess each object
   seurat_list <- apply_fun(seq_along(seurat_list), function(i) {
-
     obj <- seurat_list[[i]]
 
-    # Skip object if fewer than 50 cells remain
-    if (ncol(obj) < 50) {
-      if (verbose) message(sprintf("Skipping object %d: fewer than 50 cells after filtering.", i))
+    if (ncol(obj) < 200) {
+      if (verbose) message(sprintf("Skipping object %d: fewer than 200 cells after filtering.", i))
       return(NULL)
     }
 
     DefaultAssay(obj) <- assay_type
 
-    # Optionally slim object
     if (diet) {
       obj <- do.call(DietSeurat, c(list(obj), diet_args))
     }
@@ -83,7 +82,7 @@ IntegrateSeuratObjects <- function(
     obj <- subset(obj, subset = nFeature_RNA >= min_features)
 
     obj <- NormalizeData(obj, assay = assay_type)
-    obj <- FindVariableFeatures(obj, selection.method = "vst", nfeatures = nfeatures, assay = assay_type)
+    obj <- FindVariableFeatures(obj, selection.method = "vst", nFeatures = nFeatures, assay = assay_type)
     obj <- ScaleData(obj, vars.to.regress = regress_vars, verbose = FALSE, assay = assay_type)
 
     return(obj)
@@ -92,10 +91,9 @@ IntegrateSeuratObjects <- function(
   seurat_list <- Filter(Negate(is.null), seurat_list)
 
   if (length(seurat_list) < 2) {
-    stop("Integration requires at least two Seurat objects with ≥50 cells after filtering.")
+    stop("Integration requires at least two Seurat objects with ≥200 cells after filtering.")
   }
 
-  # MEMORY - CAREFUL!!!!
   if (return_unintegrated) {
     if (verbose) message("Returning merged object without integration.")
     merged <- merge(x = seurat_list[[1]], y = seurat_list[-1])
@@ -106,20 +104,39 @@ IntegrateSeuratObjects <- function(
   anchors <- FindIntegrationAnchors(
     object.list = seurat_list,
     normalization.method = "LogNormalize",
-    anchor.features = nfeatures,
+    anchor.features = nFeatures,
     reduction = anchor_reduction,
     dims = dims
   )
 
   if (verbose) message("Integrating data...")
-  integrated <- IntegrateData(anchorset = anchors, dims = dims)
+  integration_result <- tryCatch({
+    IntegrateData(anchorset = anchors, dims = dims, k.weight = k.weight)
+  }, error = function(e) {
+    if (grepl("Number of anchor cells is less than k.weight", e$message)) {
+      warning("Integration failed with k.weight = ", k.weight, 
+              ". Retrying with k.weight = 50...")
+      return(IntegrateData(anchorset = anchors, dims = dims, k.weight = 50))
+    } else {
+      stop(e)
+    }
+  })
 
-  DefaultAssay(integrated) <- "integrated"
-  integrated <- ScaleData(integrated, verbose = FALSE)
-  integrated <- RunPCA(integrated, verbose = FALSE)
+  DefaultAssay(integration_result) <- "integrated"
+  
+  integration_result <- ScaleData(integration_result, verbose = FALSE)
+  integration_result <- RunPCA(integration_result, verbose = FALSE)
+
+  if (log_warnings) {
+    w <- warnings()
+    if (length(w) > 0) {
+      message("⚠️  Integration warnings:")
+      print(w)
+    }
+  }
 
   if (verbose) message("Integration complete.")
-  return(integrated)
+  return(integration_result)
 }
 
 
