@@ -1,8 +1,3 @@
-# 
-
-NOW WE WORK IN SOMETHING  ESLSE
-
-
 #' Plot Integrated Seurat Dimensionality Reductions with Features or Metadata
 #'
 #' Generates `FeaturePlot` or `DimPlot` visualizations for dimensionality reduction results
