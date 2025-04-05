@@ -14,7 +14,7 @@ subset_seurat(seurat_obj, fraction = 1, seed = 42)
 \item{seed}{Random seed for reproducibility}
 }
 \value{
-A subsetted Seurat object (or original if fraction = 1)
+A subsetted Seurat object (or original if fraction = 1 or <100 cells), or NULL if input is not a Seurat object
 }
 \description{
 Randomly subset a fraction of cells from a Seurat object

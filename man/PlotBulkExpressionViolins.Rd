@@ -5,25 +5,44 @@
 \title{Plot Gene Expression per Cluster across Samples using Patchwork}
 \usage{
 PlotBulkExpressionViolins(
-  expr_list,
+  expr_list = NULL,
+  long_df = NULL,
   genes = NULL,
   base_width = 1.5,
-  base_height = 3
+  base_height = 3,
+  save_as_pdf = FALSE,
+  subset = NULL,
+  threads = 1,
+  y_max = NULL
 )
 }
 \arguments{
 \item{expr_list}{Output from AverageExpressionPerClusterPerSample().}
+
+\item{long_df}{Optional precomputed long-format data frame (overrides expr_list).}
 
 \item{genes}{Character vector of gene names to include. If NULL, uses all.}
 
 \item{base_width}{Numeric, base width per sample (inches). Default: 1.5}
 
 \item{base_height}{Numeric, base height per cluster (inches). Default: 3}
+
+\item{save_as_pdf}{Logical, if TRUE saves the plots as PDF. Default: FALSE}
+
+\item{subset}{Numeric between 0 and 1, to randomly downsample data (optional).}
+
+\item{threads}{Number of parallel threads to use for plotting. Default: 1}
 }
 \value{
-A patchwork object of all cluster plots.
+A named list containing:
+\itemize{
+\item linearplots: list of ggplot objects (linear scale)
+\item logplots: list of ggplot objects (log scale)
+\item detection_plot_clusters: ggplot object
+\item detection_plot_samples: ggplot object
+}
 }
 \description{
-Creates boxplots of gene expression per cluster across samples,
-using patchwork to display all plots in a single layout.
+Creates boxplots (with quasirandom jitter) of gene expression per cluster across samples.
+Uses patchwork to display all plots in a single layout.
 }
