@@ -74,8 +74,9 @@ add_ArchR_meta_to_Seurat <- function(seurat_obj, archr_df,
   print(stats, row.names = FALSE)
 
   # Final metadata: all selected value_cols
-  new_meta <- merged[, value_cols, drop = FALSE]
-  rownames(new_meta) <- merged$cell
+  new_meta <- merged[, c("cell", value_cols), drop = FALSE]
+  rownames(new_meta) <- new_meta$cell
+  new_meta$cell <- NULL
   new_meta[is.na(new_meta)] <- absent_value
 
   # Subset Seurat if intersect mode
@@ -83,5 +84,8 @@ add_ArchR_meta_to_Seurat <- function(seurat_obj, archr_df,
     seurat_obj <- subset(seurat_obj, cells = rownames(new_meta))
   }
 
-  Seurat::AddMetaData(seurat_obj, new_meta)
+  # Add new metadata
+  seurat_obj <- Seurat::AddMetaData(seurat_obj, metadata = new_meta)
+
+  return(seurat_obj)
 }
