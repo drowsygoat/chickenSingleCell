@@ -1,7 +1,7 @@
 #' Cluster and Explore an Integrated Seurat Object
 #'
 #' Performs dimensionality reduction, clustering, and visualizations on an integrated Seurat object.
-#' Generates cumulative cluster plots as well as individual per-sample highlight plots on one page.
+#' Generates cumulative cluster plots as well as individual per-sample highlight plots.
 #'
 #' @param seurat_obj Integrated Seurat object.
 #' @param dims PCA dimensions to use (default: 1:30).
@@ -55,6 +55,7 @@ cluster_and_explore_integrated <- function(seurat_obj,
     ggtitle("t-SNE: All Clusters")
 
   ggsave(file.path(output_dir, "UMAP_All_Clusters.pdf"), p_umap_all, width = 7, height = 5)
+  
   ggsave(file.path(output_dir, "tSNE_All_Clusters.pdf"), p_tsne_all, width = 7, height = 5)
 
   # --- Per-sample highlight plots (one page) ---
@@ -69,8 +70,6 @@ cluster_and_explore_integrated <- function(seurat_obj,
     reduction = "umap", group.by = "clusters") +
     ggtitle(paste("UMAP:", s))
   })
-
-
 
   tsne_list <- lapply(samples, function(s) {
     DimPlot(subset(seurat_obj, cells = colnames(seurat_obj)[seurat_obj[[sample_col]][,1] == s]),

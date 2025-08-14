@@ -17,6 +17,11 @@ add_ArchR_meta_to_Seurat <- function(seurat_obj, archr_df,
                                      archr_value_cols = NULL,
                                      dry_run = FALSE) {
   mode <- match.arg(mode)
+  if (mode == "add") {
+    message(paste("Mode:", mode, "(adding ArchR metadata to Seurat object)"))
+  } else {
+    message(paste("Mode:", mode, "(subsetting Seurat object to match ArchR metadata)"))
+  }
 
   # Parse Seurat cells
   seurat_df <- data.frame(cell = Seurat::Cells(seurat_obj), stringsAsFactors = FALSE)

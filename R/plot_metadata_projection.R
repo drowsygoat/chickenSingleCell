@@ -13,6 +13,9 @@
 #' @param pdf_dir Directory to save PDF (default = "plots").
 #'
 #' @return A ggplot object (single reduction) or named list of ggplots (multiple reductions).
+#' 
+#' 
+# this one uses GGPLOT!!!!
 plot_metadata_projection <- function(seurat_obj,
                                      meta_col,
                                      reduction = NULL,

@@ -6,13 +6,17 @@
 #' @param long_df_path Path to the saved long-format expression RDS file. Default: "data/long_df_cluster_expression.rds".
 #' @param group_by Grouping variable: "sample" or "cluster". Determines which aggregation to use. Default: "sample".
 #' @param save_as_pdf Logical. If TRUE, saves the plot to the appropriate file.
+#' @param plot_dir Directory where plots should be saved (used only if `save_as_pdf = TRUE`). Default: "plots".
 #'
 #' @return A ggplot2 object.
 #' @export
 PlotCP10KDetectionStats <- function(long_df_path = "data/long_df_cluster_expression.rds",
                                     group_by = c("sample", "cluster"),
-                                    save_as_pdf = FALSE) {
+                                    save_as_pdf = FALSE,
+                                    plot_dir = "plots") {
+
   required_pkgs <- c("dplyr", "tidyr", "ggplot2")
+  
   invisible(lapply(required_pkgs, function(pkg) {
     if (!requireNamespace(pkg, quietly = TRUE)) stop(sprintf("Missing required package: %s", pkg))
   }))
@@ -51,7 +55,7 @@ PlotCP10KDetectionStats <- function(long_df_path = "data/long_df_cluster_express
     p <- ggplot2::ggplot(detection_df, ggplot2::aes(x = sample, y = n, fill = threshold)) +
       ggplot2::labs(title = "Gene Detection per Sample (CP10K thresholds)",
                     x = "Sample", y = "Number of genes", fill = "Detection Threshold")
-    out_file <- "plots/CP10K_detection_stats_per_sample.pdf"
+    out_file <- file.path(plot_dir, "CP10K_detection_stats_per_sample.pdf")
 
   } else if (group_by == "cluster") {
     thresholds <- c(
@@ -84,7 +88,7 @@ PlotCP10KDetectionStats <- function(long_df_path = "data/long_df_cluster_express
     p <- ggplot2::ggplot(detection_df, ggplot2::aes(x = cluster, y = n, fill = threshold)) +
       ggplot2::labs(title = "Gene Detection per Cluster (CP10K thresholds)",
                     x = "Cluster", y = "Number of genes", fill = "Detection Threshold")
-    out_file <- "plots/CP10K_detection_stats_per_cluster.pdf"
+    out_file <- file.path(plot_dir, "CP10K_detection_stats_per_cluster.pdf")
   }
 
   # Final plot layout
@@ -100,7 +104,7 @@ PlotCP10KDetectionStats <- function(long_df_path = "data/long_df_cluster_express
     )
 
   if (save_as_pdf) {
-    if (!dir.exists("plots")) dir.create("plots")
+    if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
     ggplot2::ggsave(out_file, p, width = 10, height = 6)
     message(sprintf("Saved plot to %s", out_file))
   }

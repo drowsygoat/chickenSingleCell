@@ -19,10 +19,13 @@
 #'
 #' @export
 normalize_with_sct <- function(seurat_obj,
+                               assay = "RNA",
                                vars.to.regress = c("percent.mt"),
-                               verbose = TRUE) {
+                               verbose = TRUE,
+                               new.assay.name = "SCT") {
   if (!inherits(seurat_obj, "Seurat")) {
-    stop("Input must be a Seurat object.")
+    warning("Input must be a Seurat object. Returning NULL.")
+    return(NULL)
   }
 
   if (!"RNA" %in% Assays(seurat_obj)) {
@@ -40,9 +43,10 @@ normalize_with_sct <- function(seurat_obj,
 
   seurat_obj <- SCTransform(
     seurat_obj,
-    assay = "RNA",
+    assay = assay,
     vars.to.regress = vars.to.regress,
-    verbose = verbose
+    verbose = verbose,
+    new.assay.name = new.assay.name
   )
 
   return(seurat_obj)

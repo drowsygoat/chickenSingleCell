@@ -6,8 +6,6 @@
 #' @param expr_list Output from AverageExpressionPerClusterPerSample().
 #' @param long_df Optional precomputed long-format data frame (overrides expr_list).
 #' @param genes Character vector of gene names to include. If NULL, uses all.
-#' @param base_width Numeric, base width per sample (inches). Default: 1.5
-#' @param base_height Numeric, base height per cluster (inches). Default: 3
 #' @param save_as_pdf Logical, if TRUE saves the plots as PDF. Default: FALSE
 #' @param subset Numeric between 0 and 1, to randomly downsample data (optional).
 #' @param threads Number of parallel threads to use for plotting. Default: 1
@@ -21,12 +19,11 @@
 PlotBulkExpressionViolins <- function(expr_list = NULL,
                                       long_df = NULL,
                                       genes = NULL,
-                                      base_width = 1.5,
-                                      base_height = 3,
                                       save_as_pdf = FALSE,
                                       subset = NULL,
                                       threads = 1,
-                                      y_max = NULL) {
+                                      y_max = NULL,
+                                      plot_dir = "plots") {
 
   required_pkgs <- c("ggplot2", "tidyr", "dplyr", "purrr")
 
@@ -83,19 +80,28 @@ PlotBulkExpressionViolins <- function(expr_list = NULL,
       ))
       return(df)
     })
-
+print(split_data)
   # Generate plots and save if save_as_pdf = TRUE
-  linearplots <- save_cluster_expression_plots(split_data, save_as_pdf = TRUE, log_scale = FALSE, file_prefix = "cluster_expression", threads = threads, y_max = y_max)
 
-  logplots <- save_cluster_expression_plots(split_data, save_as_pdf = TRUE, log_scale = TRUE, file_prefix = "cluster_expression", threads = threads)
+  linearplots <- save_cluster_expression_plots(split_data, save_as_pdf = TRUE, log_scale = FALSE, file_prefix = "cluster_expression", threads = threads, y_max = y_max, plot_dir = plot_dir)
 
-  detection_plot_clusters <- PlotCP10KDetectionStats(group_by = "cluster", save_as_pdf = TRUE)
+  logplots <- save_cluster_expression_plots(split_data, save_as_pdf = TRUE, log_scale = TRUE, file_prefix = "cluster_expression", threads = threads, plot_dir = plot_dir)
 
-  detection_plot_samples  <- PlotCP10KDetectionStats(group_by = "sample", save_as_pdf = TRUE)
+  # Color-coded plot across all clusters, no facets
+  comb_color <- save_combined_cluster_expression_plot(split_data, facet_clusters = FALSE, plot_dir = plot_dir, log_scale = TRUE, y_max = y_max, file_prefix = "cluster_expression_comb_col")
+
+# Faceted plot (one panel per cluster)
+  comb_facets <- save_combined_cluster_expression_plot(split_data, facet_clusters = TRUE, plot_dir = plot_dir, log_scale = TRUE, y_max = y_max, file_prefix = "cluster_expression_comb_fac")
+
+  detection_plot_clusters <- PlotCP10KDetectionStats(group_by = "cluster", save_as_pdf = TRUE, plot_dir = plot_dir)
+
+  detection_plot_samples  <- PlotCP10KDetectionStats(group_by = "sample", save_as_pdf = TRUE, plot_dir = plot_dir)
 
   return(list(
     linearplots = linearplots,
     logplots = logplots,
+    comb_color = comb_color,
+    comb_facets = comb_facets,
     detection_plot_clusters = detection_plot_clusters,
     detection_plot_samples = detection_plot_samples
   ))

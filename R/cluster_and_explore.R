@@ -194,8 +194,11 @@ cluster_and_explore <- function(seurat_obj,
 
   # ---- Save all sections as separate, dynamically sized PDFs ----
   save_plot_section(cluster_plots, "Cluster_Plots", sample_name, use.assay, ncol = 2)
+
   save_plot_section(meta_plots, "Metadata_Plots", sample_name, use.assay, ncol = 2)
+  
   save_plot_section(vln_plots, "Violin_Plots", sample_name, use.assay, ncol = 2)
+
   save_plot_section(marker_plots, "Marker_Plots", sample_name, use.assay, ncol = 3)
 
   message("✅ All plots saved for: ", sample_name)

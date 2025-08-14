@@ -159,6 +159,7 @@ plot_integrated_dimplot2 <- function(seurat_obj,
               ) +
                 ggplot2::labs(title = paste0(red, " - ", plot_feature, " (", split_by, ": ", split_val, ")"), color = "Expression") +
                 ggplot2::theme(aspect.ratio = 1)
+                
               if (!show_legend) p <- p + ggplot2::theme(legend.position = "none")
               plots[[paste0(red, "_", plot_feature, "_", split_val)]] <- p
             }
@@ -242,8 +243,11 @@ plot_integrated_dimplot2 <- function(seurat_obj,
 
     if (save_as_pdf && length(plots) > 0) {
       if (!dir.exists(pdf_dir)) dir.create(pdf_dir, recursive = TRUE)
+
       tag <- if (!is.null(feature)) paste0(feature, collapse = "_") else if (!is.null(highlight)) paste(highlight, collapse = "_") else group_by
+
       suffix <- paste0("_", tag, if (!is.null(split_by)) paste0("_splitby_", split_by) else "")
+
       filename <- file.path(pdf_dir, paste0("IntegratedPlot", suffix, ".pdf"))
 
       plot_count <- length(plots)
@@ -259,6 +263,7 @@ plot_integrated_dimplot2 <- function(seurat_obj,
       nrow <- ceiling(plot_count / ncol)
 
       patch <- patchwork::wrap_plots(plots, ncol = ncol)
+
       ggplot2::ggsave(filename, plot = patch, width = plot_width * ncol, height = plot_height * nrow, limitsize = FALSE)
       if (verbose) message("💾 Saved PDF to: ", filename)
     }

@@ -1,44 +1,10 @@
-#' Calculate Aggregated (Pseudobulk) Expression per Cluster per Sample
-#'
-#' Computes pseudobulk (summed) expression for each cluster within each sample.
-#' Handles either a single Seurat object or a list of Seurat objects.
-#' Uses `AggregateExpression()` and supports RNA, SCTransform, or other assays.
-#'
-#' @param obj_list A Seurat object or a list of Seurat objects.
-#' @param assay The assay to use (e.g., `"RNA"` or `"SCT"`). If NULL, uses the object's active assay.
-#' @param slot The expression slot to use. Default is `"data"`.
-#' @param cluster_col Name of the metadata column containing cluster identities. Default is `"seurat_clusters"`.
-#' @param normalization.method Method for normalization. Options:
-#'   \describe{
-#'     \item{"LogNormalize"}{(default) Divide feature counts by total counts per cell, multiply by `scale.factor`, then `log1p`}
-#'     \item{"CLR"}{Centered log-ratio transformation}
-#'     \item{"RC"}{Relative counts; divide by total counts per cell, multiply by `scale.factor`, no log}
-#'     \item{"none" or NULL}{No normalization (recommended for SCT residuals)}
-#'   }
-#' @param scale.factor Scaling factor used in normalization. Default is `10000`.
-#' @param ... Additional arguments passed to `AggregateExpression()`.
-#'
-#' @return A named list of matrices. Each matrix contains aggregated gene expression (genes x clusters) for a sample.
-#' @export
-#'
-#' @examples
-#' # Default log-normalization (RNA)
-#' result <- AverageExpressionPerClusterPerSample(seurat_obj)
-#'
-#' # Pseudobulk counts without normalization (e.g., for SCT)
-#' result <- AverageExpressionPerClusterPerSample(seurat_obj, assay = "SCT", normalization.method = "none")
-#'
-#' # Counts per million
-#' result <- AverageExpressionPerClusterPerSample(seurat_obj, normalization.method = "RC", scale.factor = 1e6)
 AverageExpressionPerClusterPerSample <- function(obj_list,
                                                  assay = NULL,
-                                                 slot = "data",
+                                                 layer = "data",
                                                  cluster_col = "seurat_clusters",
-                                                 normalization.method = c("LogNormalize", "CLR", "RC", "none"),
                                                  scale.factor = 10000,
-                                                 ...) {
-                                                  
-  normalization.method <- match.arg(normalization.method)
+                                                 return.se = FALSE,
+                                                 se.save.path = NULL) {
 
   if (inherits(obj_list, "Seurat")) {
     obj_list <- list(obj_list)
@@ -53,65 +19,247 @@ AverageExpressionPerClusterPerSample <- function(obj_list,
         return(setNames(list(NULL), paste0("obj", i)))
       }
 
-      this_assay <- if (is.null(assay)) DefaultAssay(obj) else assay
+      this_assay <- if (is.null(assay)) Seurat::DefaultAssay(obj) else assay
       message(sprintf("Object %d: using assay = '%s'", i, this_assay))
 
       sample_ids <- infer_sample_id(obj)
       obj[["sample_id"]] <- sample_ids
-      
+
       if (length(unique(sample_ids)) > 1) {
         message(sprintf("Object %d has multiple samples. Will compute per-sample aggregates.", i))
       }
 
-      Idents(obj) <- cluster_col
+      Seurat::Idents(obj) <- cluster_col
       clusters <- levels(obj)
       message(sprintf("Object %d has %d clusters.", i, length(clusters)))
-
-      # Determine normalization
-      norm_method <- if (tolower(normalization.method) %in% c("none", "null")) {
-        message(sprintf("Skipping normalization for object %d (normalization.method = 'none')", i))
-        NULL
-      } else {
-        normalization.method
-      }
 
       sample_names <- unique(obj$sample_id)
 
       lapply(sample_names, function(sample) {
         sample_obj <- subset(obj, subset = sample_id == sample)
+
+        # ✅ Safety check: skip if too few cells
+        if (ncol(sample_obj) < 2) {
+          message(sprintf("⚠️ Skipping sample '%s' in object %d: too few cells (%d)", sample, i, ncol(sample_obj)))
+          return(setNames(list(NULL), paste0(sample, "_obj", i, "_", this_assay)))
+        }
+
         if (length(unique(sample_obj[[cluster_col]])) < 1) return(NULL)
 
-             if (!this_assay %in% Assays(sample_obj)) {
-        stop(sprintf("Assay '%s' not found in object %d", this_assay, i))
-      }
+        if (!this_assay %in% names(sample_obj@assays)) {
+          stop(sprintf("Assay '%s' not found in object %d", this_assay, i))
+        }
 
-      if (!cluster_col %in% colnames(sample_obj@meta.data)) {
-        stop(sprintf("Cluster column '%s' not found in object %d", cluster_col, i))
-      }
+        if (!cluster_col %in% colnames(sample_obj@meta.data)) {
+          stop(sprintf("Cluster column '%s' not found in object %d", cluster_col, i))
+        }
 
-      if (all(is.na(sample_obj[[cluster_col]]))) {
-        warning(sprintf("All cluster values are NA in object %d (sample %s)", i, sample))
-        return(NULL)
-      }
+        if (all(is.na(sample_obj[[cluster_col]]))) {
+          warning(sprintf("All cluster values are NA in object %d (sample %s)", i, sample))
+          return(NULL)
+        }
 
-        agg_exp <- AggregateExpression(
-          sample_obj,
-          assays = this_assay,
-          slot = slot,
-          group.by = cluster_col,
-          normalization.method = norm_method,
-          scale.factor = scale.factor,
-          return.seurat = FALSE,
-          verbose = FALSE
-        )[[this_assay]]
+        message(sprintf("Processing sample: %s (object %d)", sample, i))
+        message(sprintf("  Cells: %d", ncol(sample_obj)))
+        message(sprintf("  Assay: %s, Cluster col: %s", this_assay, cluster_col))
+
+        message("  Cluster table:")
+        print(table(sample_obj[[cluster_col]]))
+
+        message("  Sample ID table:")
+        print(table(sample_obj$sample_id))
 
         name <- paste0(sample, "_obj", i, "_", this_assay)
-        setNames(list(agg_exp), name)
+
+        result <- tryCatch({
+          agg_raw <- Seurat::PseudobulkExpression(
+            sample_obj,
+            assays = this_assay,
+            layer = layer,
+            group.by = cluster_col,
+            scale.factor = scale.factor,
+            return.seurat = FALSE,
+            verbose = FALSE
+          )
+
+          message("  ✅ PseudobulkExpression succeeded")
+          agg_exp <- agg_raw[[this_assay]]
+          setNames(list(agg_exp), name)
+        }, error = function(e) {
+          message("  ❌ PseudobulkExpression failed:")
+          message(e$message)
+          message("  🔍 Inspecting structure of sample_obj and metadata:")
+          print(str(sample_obj@meta.data))
+          setNames(list(NULL), name)
+        })
+
+        return(result)
       })
     }),
     recursive = FALSE
   )
 
-  return(flatten(result_list))
-  
+  result_list <- purrr::list_flatten(result_list)
+
+  if (!return.se) {
+    return(result_list)
+  }
+
+  # Convert matrices to SummarizedExperiment objects
+  se_list <- lapply(names(result_list), function(name) {
+    mat <- result_list[[name]]
+    if (is.null(mat)) return(NULL)
+
+    # ✅ Fallback for missing gene names
+    if (is.null(rownames(mat)) || any(rownames(mat) == "")) {
+      warning(sprintf("⚠️ Matrix '%s' has missing gene names. Assigning fallback names.", name))
+      rownames(mat) <- paste0("gene_", seq_len(nrow(mat)))
+    }
+
+    parts <- strsplit(name, "_")[[1]]
+    sample <- parts[1]
+    assay_name <- parts[3]
+    cluster_ids <- colnames(mat)
+
+    new_colnames <- paste(sample, cluster_ids, assay_name, sep = "_")
+    colnames(mat) <- new_colnames
+
+    col_data <- data.frame(
+      cluster = cluster_ids,
+      sample_id = sample,
+      assay = assay_name,
+      row.names = new_colnames,
+      stringsAsFactors = FALSE
+    )
+
+    row_data <- data.frame(
+      gene = rownames(mat),
+      row.names = rownames(mat),
+      stringsAsFactors = FALSE
+    )
+
+    SummarizedExperiment::SummarizedExperiment(
+      assays = list(counts = mat),
+      colData = col_data,
+      rowData = row_data
+    )
+  })
+
+  se_list <- Filter(Negate(is.null), se_list)
+
+  if (length(se_list) == 0) {
+    warning("No valid SummarizedExperiments to merge. Returning NULL.")
+    return(NULL)
+  }
+
+  all_genes <- unique(unlist(lapply(se_list, SummarizedExperiment::rownames)))
+
+  pad_se <- function(se, all_genes) {
+    mat <- SummarizedExperiment::assay(se)
+
+    if (!inherits(mat, "dgCMatrix")) {
+      mat <- Matrix::as(mat, "dgCMatrix")
+    }
+
+    missing_genes <- setdiff(all_genes, rownames(mat))
+
+    if (length(missing_genes) > 0) {
+      zero_mat <- Matrix::Matrix(
+        0, nrow = length(missing_genes), ncol = ncol(mat),
+        dimnames = list(missing_genes, colnames(mat)), sparse = TRUE
+      )
+      mat <- rbind(mat, zero_mat)
+    }
+
+    mat <- mat[all_genes, , drop = FALSE]
+
+    col_data <- as.data.frame(SummarizedExperiment::colData(se))
+    row_data <- data.frame(gene = all_genes, row.names = all_genes, stringsAsFactors = FALSE)
+
+    SummarizedExperiment::SummarizedExperiment(
+      assays = list(counts = mat),
+      colData = col_data,
+      rowData = row_data
+    )
+  }
+
+  se_list_padded <- lapply(se_list, pad_se, all_genes = all_genes)
+
+  merged_se <- tryCatch({
+    do.call(SummarizedExperiment::cbind, se_list_padded)
+  }, error = function(e) {
+    stop("❌ Failed to merge SummarizedExperiment objects: ", e$message)
+  })
+
+  if (!is.null(se.save.path)) {
+    dir.create(dirname(se.save.path), showWarnings = FALSE, recursive = TRUE)
+    saveRDS(merged_se, se.save.path)
+    message(sprintf("📁 Saved SummarizedExperiment to: %s", se.save.path))
+  }
+
+  if (return.se && !is.null(merged_se)) {
+    covariate_dir_mean <- file.path(dirname(se.save.path), "cluster_summary_covariates_mean")
+    
+    covariate_dir_median <- file.path(dirname(se.save.path), "cluster_summary_covariates_median")
+
+    dir.create(covariate_dir_mean, showWarnings = FALSE, recursive = TRUE)
+    dir.create(covariate_dir_median, showWarnings = FALSE, recursive = TRUE)
+
+    mat <- SummarizedExperiment::assay(merged_se)
+    col_data <- as.data.frame(SummarizedExperiment::colData(merged_se))
+
+    col_data$cluster <- as.character(col_data$cluster)
+    col_data$sample_id <- as.character(col_data$sample_id)
+
+    all_clusters <- sort(unique(col_data$cluster))
+    all_samples <- sort(unique(col_data$sample_id))
+
+    for (clust in all_clusters) {
+      cols_in_cluster <- which(col_data$cluster == clust)
+      sub_mat <- mat[, cols_in_cluster, drop = FALSE]
+      sub_coldata <- col_data[cols_in_cluster, , drop = FALSE]
+      sample_groups <- split(seq_along(cols_in_cluster), sub_coldata$sample_id)
+
+      median_vals <- sapply(all_samples, function(sid) {
+        if (!sid %in% names(sample_groups)) return(NA_real_)
+        vals <- as.numeric(sub_mat[, sample_groups[[sid]], drop = FALSE])
+        vals <- vals[vals != 0]
+        if (length(vals) == 0) return(NA_real_)
+        stats::median(vals, na.rm = TRUE)
+      })
+
+      mean_vals <- sapply(all_samples, function(sid) {
+        if (!sid %in% names(sample_groups)) return(NA_real_)
+        vals <- as.numeric(sub_mat[, sample_groups[[sid]], drop = FALSE])
+        vals <- vals[vals != 0]
+        if (length(vals) == 0) return(NA_real_)
+        mean(vals, na.rm = TRUE)
+      })
+      print(median_vals)
+
+      median_df <- as.data.frame(t(median_vals))
+      rownames(median_df) <- paste0("cluster_", clust)
+      median_file <- file.path(covariate_dir_median, paste0("cluster_", clust, "_median.txt"))
+      print(median_df)
+      print(as_tibble(median_df))
+
+      median_df_out <- cbind(V1 = rownames(median_df), median_df)
+      utils::write.table(median_df_out, file = median_file, sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+      # print(median_df_out)
+      print(median_df_out)
+      print(as_tibble(median_df_out))
+
+      mean_df <- as.data.frame(t(mean_vals))
+      rownames(mean_df) <- paste0("cluster_", clust)
+      mean_file <- file.path(covariate_dir_mean, paste0("cluster_", clust, "_mean.txt"))
+
+      mean_df_out <- cbind(V1 = rownames(mean_df), mean_df)
+      # print(mean_df_out)
+      utils::write.table(mean_df_out, file = mean_file, sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+
+      message(sprintf("✅ Saved cluster summary: %s (mean + median)", clust))
+    }
+  }
+
+  return(merged_se)
 }
