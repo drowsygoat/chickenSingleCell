@@ -8,12 +8,11 @@ PlotBulkExpressionViolins(
   expr_list = NULL,
   long_df = NULL,
   genes = NULL,
-  base_width = 1.5,
-  base_height = 3,
   save_as_pdf = FALSE,
   subset = NULL,
   threads = 1,
-  y_max = NULL
+  y_max = NULL,
+  plot_dir = "plots"
 )
 }
 \arguments{
@@ -22,10 +21,6 @@ PlotBulkExpressionViolins(
 \item{long_df}{Optional precomputed long-format data frame (overrides expr_list).}
 
 \item{genes}{Character vector of gene names to include. If NULL, uses all.}
-
-\item{base_width}{Numeric, base width per sample (inches). Default: 1.5}
-
-\item{base_height}{Numeric, base height per cluster (inches). Default: 3}
 
 \item{save_as_pdf}{Logical, if TRUE saves the plots as PDF. Default: FALSE}
 

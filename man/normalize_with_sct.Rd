@@ -6,8 +6,10 @@
 \usage{
 normalize_with_sct(
   seurat_obj,
+  assay = "RNA",
   vars.to.regress = c("percent.mt"),
-  verbose = TRUE
+  verbose = TRUE,
+  new.assay.name = "SCT"
 )
 }
 \arguments{

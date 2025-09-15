@@ -2,7 +2,7 @@
 % Please edit documentation in R/create_seurat_list.R
 \name{create_seurat_list}
 \alias{create_seurat_list}
-\title{Create Seurat Objects from 10X Multiome Data}
+\title{Create Seurat Objects from 10x Multiome (Cell Ranger ARC) Outputs}
 \usage{
 create_seurat_list(
   parent_dir,
@@ -13,26 +13,78 @@ create_seurat_list(
 )
 }
 \arguments{
-\item{parent_dir}{A character string specifying the path to the parent directory containing sample folders.}
+\item{parent_dir}{Character path to the parent directory containing one or more
+\strong{sample subdirectories} with Cell Ranger ARC outputs.}
 
-\item{gtf_file}{A character string specifying the path to the GTF file for gene annotations.}
+\item{gtf_file}{Character path to a GTF file with gene annotations used to map
+features for the RNA assay (and any gene-dependent steps).}
+
+\item{dry_run}{Logical; if \code{TRUE}, perform discovery/validation and log what would
+be done without creating Seurat objects. Defaults to \code{FALSE}.}
+
+\item{include_ATAC}{Logical; if \code{TRUE}, add an ATAC assay using the fragments file
+when present. Defaults to \code{TRUE}.}
+
+\item{include_metadata}{Logical; if \code{TRUE}, attempt to join per-barcode metrics
+(e.g., from \code{per_barcode_metrics.csv}) into object metadata. Defaults to \code{FALSE}.}
 }
 \value{
-A list of Seurat objects, one for each sample directory.
+A \strong{named list} of Seurat objects, one per sample directory. List names
+are the basenames of the sample directories. Samples with no cells after
+subsetting are omitted.
 }
 \description{
-This script processes a directory of 10X Genomics (Cell Ranger ARC) sample folders,
-creates Seurat objects for each sample, and stores them in a list. Each Seurat object
-includes both RNA and ATAC assays along with per-barcode metadata if available.
+Iterates over sample subdirectories in a parent folder containing standard
+10x Genomics Cell Ranger ARC outputs and returns a named list of Seurat
+objects (one per sample). Each object includes an RNA assay and, optionally,
+an ATAC assay plus per-barcode metadata when available.
 }
 \details{
-The function expects the standard 10X output directory structure, including the filtered H5 matrix,
-ATAC fragments file, and per-barcode metrics. It also requires a GTF file for gene annotations.
+\strong{Expected directory structure per sample (typical Cell Ranger ARC output):}
+\itemize{
+\item Filtered 10x HDF5 matrix: \code{outs/filtered_feature_bc_matrix.h5}
+\item ATAC fragments: \code{outs/atac_fragments.tsv.gz} (and index \verb{*.tbi}) \emph{(required if \code{include_ATAC = TRUE})}
+\item Per-barcode metrics (if available): e.g., \code{outs/per_barcode_metrics.csv} or similar
 }
+
+For each sample directory found in \code{parent_dir}, this function calls
+\code{import_to_seurat()} to build a multi-assay Seurat object using the provided GTF
+for gene annotations. Samples yielding zero cells after internal subsetting are
+skipped with an informative message.
+}
+\section{Notes}{
+
+\itemize{
+\item This function assumes Cell Ranger ARC-style layout and filenames; minor
+variations may be supported by \code{import_to_seurat()}.
+\item If \code{include_ATAC = TRUE} but fragments are missing, the function will proceed
+without an ATAC assay for that sample (behavior delegated to \code{import_to_seurat()}).
+\item Large datasets can be memory-intensive; consider running with \code{dry_run = TRUE}
+first to validate paths and inputs.
+}
+}
+
 \examples{
-seurat_list <- create_seurat_list(
+\dontrun{
+# Validate inputs without heavy loading
+create_seurat_list(
   parent_dir = "/path/to/parent_dir",
-  gtf_file = "/path/to/annotations.gtf"
+  gtf_file    = "/path/to/annotations.gtf",
+  dry_run = TRUE
 )
 
+# Create RNA+ATAC objects and attach per-barcode metadata
+seurat_list <- create_seurat_list(
+  parent_dir = "/path/to/parent_dir",
+  gtf_file    = "/path/to/annotations.gtf",
+  dry_run = FALSE,
+  include_ATAC = TRUE,
+  include_metadata = TRUE
+)
+}
+
+}
+\seealso{
+\code{\link{import_to_seurat}} for per-sample import logic; packages \pkg{Seurat}
+and \pkg{Signac} for downstream analysis of RNA/ATAC assays.
 }

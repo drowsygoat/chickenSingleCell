@@ -44,14 +44,28 @@ AverageExpressionPerClusterPerSample <- function(obj_list,
           return(setNames(list(NULL), paste0(sample, "_obj", i, "_", this_assay)))
         }
 
-        if (length(unique(sample_obj[[cluster_col]])) < 1) return(NULL)
+        # ✅ Drop empty cluster levels before pseudobulk
+        if (!cluster_col %in% colnames(sample_obj@meta.data)) {
+          stop(sprintf("Cluster column '%s' not found in object %d", cluster_col, i))
+        }
+
+        # Set idents from the column (works for numeric/character/factor)
+        cl_vals <- sample_obj[[cluster_col]][, 1, drop = TRUE]
+        Seurat::Idents(sample_obj) <- cl_vals
+
+        # Drop empty levels only if it's a factor
+        if (is.factor(cl_vals)) cl_vals <- droplevels(cl_vals)
+
+        # Count unique, non-NA clusters
+        n_nonempty_clusters <- length(unique(cl_vals[!is.na(cl_vals)]))
+
+        if (n_nonempty_clusters == 0L) {
+        message(sprintf("⚠️ Skipping sample '%s' in object %d: no non-empty clusters.", sample, i))
+        return(setNames(list(NULL), paste0(sample, "_obj", i, "_", this_assay)))
+        }
 
         if (!this_assay %in% names(sample_obj@assays)) {
           stop(sprintf("Assay '%s' not found in object %d", this_assay, i))
-        }
-
-        if (!cluster_col %in% colnames(sample_obj@meta.data)) {
-          stop(sprintf("Cluster column '%s' not found in object %d", cluster_col, i))
         }
 
         if (all(is.na(sample_obj[[cluster_col]]))) {
@@ -84,6 +98,13 @@ AverageExpressionPerClusterPerSample <- function(obj_list,
 
           message("  ✅ PseudobulkExpression succeeded")
           agg_exp <- agg_raw[[this_assay]]
+
+          # 🔒 Guard: empty result (no clusters produced columns)
+          if (is.null(agg_exp) || ncol(agg_exp) == 0) {
+            message(sprintf("  ⚠️ No clusters produced columns for sample '%s' in object %d. Skipping.", sample, i))
+            return(setNames(list(NULL), name))
+          }
+
           setNames(list(agg_exp), name)
         }, error = function(e) {
           message("  ❌ PseudobulkExpression failed:")
@@ -99,6 +120,7 @@ AverageExpressionPerClusterPerSample <- function(obj_list,
     recursive = FALSE
   )
 
+  # If you use purrr elsewhere, keep this; otherwise base R is fine.
   result_list <- purrr::list_flatten(result_list)
 
   if (!return.se) {
@@ -108,7 +130,7 @@ AverageExpressionPerClusterPerSample <- function(obj_list,
   # Convert matrices to SummarizedExperiment objects
   se_list <- lapply(names(result_list), function(name) {
     mat <- result_list[[name]]
-    if (is.null(mat)) return(NULL)
+    if (is.null(mat) || ncol(mat) == 0) return(NULL)  # 🔒 guard against 0-column matrices
 
     # ✅ Fallback for missing gene names
     if (is.null(rownames(mat)) || any(rownames(mat) == "")) {
@@ -199,7 +221,6 @@ AverageExpressionPerClusterPerSample <- function(obj_list,
 
   if (return.se && !is.null(merged_se)) {
     covariate_dir_mean <- file.path(dirname(se.save.path), "cluster_summary_covariates_mean")
-    
     covariate_dir_median <- file.path(dirname(se.save.path), "cluster_summary_covariates_median")
 
     dir.create(covariate_dir_mean, showWarnings = FALSE, recursive = TRUE)
@@ -235,26 +256,17 @@ AverageExpressionPerClusterPerSample <- function(obj_list,
         if (length(vals) == 0) return(NA_real_)
         mean(vals, na.rm = TRUE)
       })
-      print(median_vals)
 
       median_df <- as.data.frame(t(median_vals))
       rownames(median_df) <- paste0("cluster_", clust)
       median_file <- file.path(covariate_dir_median, paste0("cluster_", clust, "_median.txt"))
-      print(median_df)
-      print(as_tibble(median_df))
-
       median_df_out <- cbind(V1 = rownames(median_df), median_df)
       utils::write.table(median_df_out, file = median_file, sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
-      # print(median_df_out)
-      print(median_df_out)
-      print(as_tibble(median_df_out))
 
       mean_df <- as.data.frame(t(mean_vals))
       rownames(mean_df) <- paste0("cluster_", clust)
       mean_file <- file.path(covariate_dir_mean, paste0("cluster_", clust, "_mean.txt"))
-
       mean_df_out <- cbind(V1 = rownames(mean_df), mean_df)
-      # print(mean_df_out)
       utils::write.table(mean_df_out, file = mean_file, sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
       message(sprintf("✅ Saved cluster summary: %s (mean + median)", clust))

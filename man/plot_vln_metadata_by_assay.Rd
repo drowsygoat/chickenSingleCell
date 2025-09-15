@@ -31,5 +31,5 @@ Named list of ggplot objects if return_plots = TRUE, otherwise NULL.
 }
 \description{
 For all numeric metadata columns ending in "_\if{html}{\out{<assay>}}", return violin plots
-grouped by cluster or save as a cumulative PDF.
+grouped by cluster, or save as a cumulative PDF.
 }

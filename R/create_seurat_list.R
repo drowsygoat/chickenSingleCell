@@ -1,27 +1,71 @@
-#' Create Seurat Objects from 10X Multiome Data
+#' Create Seurat Objects from 10x Multiome (Cell Ranger ARC) Outputs
 #'
-#' This script processes a directory of 10X Genomics (Cell Ranger ARC) sample folders,
-#' creates Seurat objects for each sample, and stores them in a list. Each Seurat object
-#' includes both RNA and ATAC assays along with per-barcode metadata if available.
+#' Iterates over sample subdirectories in a parent folder containing standard
+#' 10x Genomics Cell Ranger ARC outputs and returns a named list of Seurat
+#' objects (one per sample). Each object includes an RNA assay and, optionally,
+#' an ATAC assay plus per-barcode metadata when available.
 #'
-#' The function expects the standard 10X output directory structure, including the filtered H5 matrix,
-#' ATAC fragments file, and per-barcode metrics. It also requires a GTF file for gene annotations.
+#' @details
+#' **Expected directory structure per sample (typical Cell Ranger ARC output):**
+#' - Filtered 10x HDF5 matrix: `outs/filtered_feature_bc_matrix.h5`
+#' - ATAC fragments: `outs/atac_fragments.tsv.gz` (and index `*.tbi`) *(required if `include_ATAC = TRUE`)*
+#' - Per-barcode metrics (if available): e.g., `outs/per_barcode_metrics.csv` or similar
 #'
-#' @param parent_dir A character string specifying the path to the parent directory containing sample folders.
-#' @param gtf_file A character string specifying the path to the GTF file for gene annotations.
+#' For each sample directory found in `parent_dir`, this function calls
+#' `import_to_seurat()` to build a multi-assay Seurat object using the provided GTF
+#' for gene annotations. Samples yielding zero cells after internal subsetting are
+#' skipped with an informative message.
 #'
-#' @return A list of Seurat objects, one for each sample directory.
+#' @param parent_dir Character path to the parent directory containing one or more
+#'   **sample subdirectories** with Cell Ranger ARC outputs.
+#' @param gtf_file Character path to a GTF file with gene annotations used to map
+#'   features for the RNA assay (and any gene-dependent steps).
+#' @param dry_run Logical; if `TRUE`, perform discovery/validation and log what would
+#'   be done without creating Seurat objects. Defaults to `FALSE`.
+#' @param include_ATAC Logical; if `TRUE`, add an ATAC assay using the fragments file
+#'   when present. Defaults to `TRUE`.
+#' @param include_metadata Logical; if `TRUE`, attempt to join per-barcode metrics
+#'   (e.g., from `per_barcode_metrics.csv`) into object metadata. Defaults to `FALSE`.
+#'
+#' @return A **named list** of Seurat objects, one per sample directory. List names
+#'   are the basenames of the sample directories. Samples with no cells after
+#'   subsetting are omitted.
+#'
+#' @section Notes:
+#' - This function assumes Cell Ranger ARC-style layout and filenames; minor
+#'   variations may be supported by `import_to_seurat()`.
+#' - If `include_ATAC = TRUE` but fragments are missing, the function will proceed
+#'   without an ATAC assay for that sample (behavior delegated to `import_to_seurat()`).
+#' - Large datasets can be memory-intensive; consider running with `dry_run = TRUE`
+#'   first to validate paths and inputs.
+#'
+#' @seealso
+#' \code{\link{import_to_seurat}} for per-sample import logic; packages \pkg{Seurat}
+#' and \pkg{Signac} for downstream analysis of RNA/ATAC assays.
 #'
 #' @examples
-#' seurat_list <- create_seurat_list(
+#' \dontrun{
+#' # Validate inputs without heavy loading
+#' create_seurat_list(
 #'   parent_dir = "/path/to/parent_dir",
-#'   gtf_file = "/path/to/annotations.gtf"
+#'   gtf_file    = "/path/to/annotations.gtf",
+#'   dry_run = TRUE
 #' )
 #'
+#' # Create RNA+ATAC objects and attach per-barcode metadata
+#' seurat_list <- create_seurat_list(
+#'   parent_dir = "/path/to/parent_dir",
+#'   gtf_file    = "/path/to/annotations.gtf",
+#'   dry_run = FALSE,
+#'   include_ATAC = TRUE,
+#'   include_metadata = TRUE
+#' )
+#' }
+#'
 #' @export
-#' 
 
 create_seurat_list <- function(parent_dir, gtf_file, dry_run = FALSE, include_ATAC = TRUE, include_metadata = FALSE) {
+
   if (!dir.exists(parent_dir)) {
     stop("The specified parent directory does not exist: ", parent_dir)
   }

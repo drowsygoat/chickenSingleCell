@@ -1,7 +1,7 @@
 #' Generate Violin Plots for Numeric Metadata Columns Specific to an Assay
 #'
 #' For all numeric metadata columns ending in "_<assay>", return violin plots
-#' grouped by cluster or save as a cumulative PDF.
+#' grouped by cluster, or save as a cumulative PDF.
 #'
 #' @param seurat_obj A Seurat object with cluster info.
 #' @param assay Assay name used for suffix matching (e.g. "SCT").

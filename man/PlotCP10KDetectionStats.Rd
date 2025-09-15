@@ -7,7 +7,8 @@
 PlotCP10KDetectionStats(
   long_df_path = "data/long_df_cluster_expression.rds",
   group_by = c("sample", "cluster"),
-  save_as_pdf = FALSE
+  save_as_pdf = FALSE,
+  plot_dir = "plots"
 )
 }
 \arguments{
@@ -16,6 +17,8 @@ PlotCP10KDetectionStats(
 \item{group_by}{Grouping variable: "sample" or "cluster". Determines which aggregation to use. Default: "sample".}
 
 \item{save_as_pdf}{Logical. If TRUE, saves the plot to the appropriate file.}
+
+\item{plot_dir}{Directory where plots should be saved (used only if \code{save_as_pdf = TRUE}). Default: "plots".}
 }
 \value{
 A ggplot2 object.
