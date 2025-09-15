@@ -1,10 +1,10 @@
-# 🐔 chickenSingleCell
+# chickenSingleCell
 
 `chickenSingleCell` provides workflows and utilities for single-cell RNA-seq and ATAC-seq analysis in chicken, including preprocessing for downstream eQTL mapping.
 
 ---
 
-## 📦 Installation
+## Installation
 
 You can install the latest version of `chickenSingleCell` directly from GitHub using the **devtools** package:
 
@@ -16,7 +16,7 @@ You can install the latest version of `chickenSingleCell` directly from GitHub u
 
 ---
 
-## 🧬 ArchR workflow
+## ArchR workflow
 
 The ArchR-based single-cell ATAC-seq workflow is provided in:
 
@@ -28,7 +28,7 @@ The final object used for **eQTL analysis** is a `SummarizedExperiment` produced
 
 ---
 
-## 🔬 Seurat workflow
+## Seurat workflow
 
 The single-cell RNA-seq workflow is implemented in:
 
@@ -38,6 +38,6 @@ The final object used for **eQTL analysis** is a `SummarizedExperiment` generate
 
 ---
 
-## 📁 Outputs
+## Outputs
 
 Both workflows produce standardized `SummarizedExperiment` objects that is directly used as input for Matrix eQTL analysis using wrapperQTL.
